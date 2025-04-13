@@ -47,9 +47,11 @@ def get_portfolio_data(portfolio, start_date, end_date):
     latest_values = {}
     for idx, row in portfolio.iterrows():
         ticker = row["Ticker"]
-        shares = row["Shares"]
+        invested_money = row["Invested Money"]  # Investiertes Geld
         data = get_data(ticker, start_date, end_date)
         if not data.empty and "Close" in data.columns:
+            current_price = data["Close"].iloc[-1]  # Aktueller Preis
+            shares = invested_money / current_price  # Berechne die Anzahl der Shares
             value_series[ticker] = data["Close"] * shares
             latest_values[ticker] = data["Close"].iloc[-1] * shares
     if not value_series:
@@ -73,7 +75,7 @@ def calculate_portfolio_metrics(portfolio_series):
     max_drawdown = drawdown.min()
     return volatility, sharpe, var_95, max_drawdown
 
-def generate_feedback(volatility, sharpe, max_drawdown):
+def generate_feedback(volatility, sharpe, max_drawdown, liquidity):
     """
     Generiert ein Feedback basierend auf den Portfolio-Kennzahlen.
     """
@@ -92,6 +94,11 @@ def generate_feedback(volatility, sharpe, max_drawdown):
         feedback += "⚠️ Es wurde ein erheblicher Drawdown festgestellt. Eine Risikomanagement-Strategie wird empfohlen.\n"
     else:
         feedback += "✅ Drawdown liegt im akzeptablen Bereich.\n"
+
+    if liquidity < 0.1:
+        feedback += "⚠️ Deine Portfolio-Liquidität ist gering. Eine Erhöhung der Liquidität könnte hilfreich sein.\n"
+    else:
+        feedback += "✅ Die Liquidität deines Portfolios ist ausreichend.\n"
 
     return feedback
 
@@ -117,43 +124,6 @@ def plot_allocation(latest_values):
     st.plotly_chart(fig, use_container_width=True)
 
 # --------------------------
-# News-Funktionen (simuliert)
-# --------------------------
-
-def get_news(tickers):
-    """
-    Simuliert das Abrufen aktueller News für die angegebenen Ticker.
-    (Diese Funktion kannst du später durch einen API-Aufruf ersetzen.)
-    """
-    # Beispiel-News-Daten:
-    news = [
-        {"title": "Tech Markets Rally", "source": "Reuters", "summary": "Tech stocks are surging due to strong earnings reports."},
-        {"title": "Crypto Volatility Continues", "source": "Bloomberg", "summary": "Cryptocurrencies remain volatile amid regulatory uncertainty."},
-        {"title": "Market Update", "source": "CNBC", "summary": "Overall market sentiment improves as investor confidence grows."}
-    ]
-    return news
-
-def summarize_news(news):
-    """
-    Simuliert eine KI-gestützte Zusammenfassung der News.
-    """
-    combined = " ".join(item["summary"] for item in news)
-    # Hier könntest du eine API für KI-basierte Summaries integrieren.
-    summary = "AI-Summarized News: " + combined
-    return summary
-
-def display_news(news, summary):
-    """
-    Zeigt die einzelnen News-Einträge und die KI-Zusammenfassung an.
-    """
-    st.markdown("### Latest News")
-    for item in news:
-        st.markdown(f"**{item['title']}** - *{item['source']}*")
-        st.write(item['summary'])
-    st.markdown("### AI Summary")
-    st.write(summary)
-
-# --------------------------
 # Hauptfunktion
 # --------------------------
 
@@ -165,8 +135,7 @@ def main():
     st.write("Bearbeite dein Aktien-Portfolio in der Tabelle unten:")
     default_stocks = pd.DataFrame({
         "Ticker": ["AAPL", "MSFT", "TSLA"],
-        "Shares": [10, 8, 5],
-        "Buy Price": [130, 220, 700]
+        "Invested Money": [1300, 2200, 3500]  # Investiertes Geld (z.B. 1300$ für AAPL)
     })
     stocks_portfolio = st.data_editor(default_stocks, num_rows="dynamic", use_container_width=True)
 
@@ -174,8 +143,7 @@ def main():
     st.write("Bearbeite dein Krypto-Portfolio in der Tabelle unten (nutze z.B. 'BTC-USD' für Bitcoin, 'ETH-USD' für Ethereum):")
     default_crypto = pd.DataFrame({
         "Ticker": ["BTC-USD", "ETH-USD"],
-        "Shares": [0.5, 2],
-        "Buy Price": [30000, 2000]
+        "Invested Money": [15000, 4000]  # Investiertes Geld
     })
     crypto_portfolio = st.data_editor(default_crypto, num_rows="dynamic", use_container_width=True)
 
@@ -216,6 +184,7 @@ def main():
     plot_allocation(combined_latest)
 
     # Berechnung der Portfolio-Metriken für das Gesamtportfolio:
+    liquidity = 0.2  # Beispielwert für Liquidität
     volatility, sharpe, var_95, max_drawdown = calculate_portfolio_metrics(combined_df["Total Value"])
     st.markdown("## Key Portfolio Metrics")
     col1, col2, col3, col4 = st.columns(4)
@@ -225,20 +194,8 @@ def main():
     col4.metric("Max Drawdown", f"{max_drawdown:.2%}")
 
     st.markdown("## Portfolio Feedback")
-    feedback = generate_feedback(volatility, sharpe, max_drawdown)
+    feedback = generate_feedback(volatility, sharpe, max_drawdown, liquidity)
     st.write(feedback)
-
-    # News Feed
-    st.markdown("## News Feed")
-    # Vereine alle Ticker aus beiden Portfolios:
-    all_tickers = list(pd.concat([stocks_portfolio["Ticker"], crypto_portfolio["Ticker"]]).unique())
-    news = get_news(all_tickers)
-    summary = summarize_news(news)
-    display_news(news, summary)
-
-    st.markdown("## Zukünftige Features")
-    st.info("Weitere Features könnten Backtesting, erweiterte technische Indikatoren (RSI, MACD, Bollinger Bands), "
-            "dynamische Portfoliooptimierung und real-time News-Integration umfassen.")
 
 if __name__ == "__main__":
     main()
